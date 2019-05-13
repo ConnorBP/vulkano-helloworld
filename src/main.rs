@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano::buffer::CpuAccessibleBuffer;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::command_buffer::CommandBuffer;
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::device::Device;
 use vulkano::device::DeviceExtensions;
@@ -104,6 +104,8 @@ fn main() {
     let dest_content = dest.read().unwrap();
     assert_eq!(&*src_content, &*dest_content);
 
+    println!("finished running simple command buffer.");
+
     // -------------------------------------
     // now we are going to try running some parallel computations on a large arbitrary iteration of numbers
     // http://vulkano.rs/guide/compute-intro
@@ -136,6 +138,40 @@ fn main() {
             .unwrap(),
     );
 
+    // Create a command buffer to execute the compute pipeline.
+    // This is our "Dispatch Operation"
+
+    // Create the dispatch command buffer with 1024 work groups (same as is defined in the shader code)
+    // Note: The last parameter to dispatch contains the push constants, which we haven't covered yet.
+    // Push constants are a way to pass a small amount of data to a shader,
+    // as an alternative to putting this data in a buffer in a descriptor set.
+    let command_buffer = AutoCommandBufferBuilder::new(device.clone(), queue.family())
+        .unwrap()
+        .dispatch([1024, 1, 1], compute_pipeline.clone(), set.clone(), ())
+        .unwrap()
+        .build()
+        .unwrap();
+
+    //submit the command buffer
+    let finished = command_buffer.execute(queue.clone()).unwrap();
+
+    // block thread until GPU is finished and then flush
+    finished
+        .then_signal_fence_and_flush()
+        .unwrap()
+        .wait(None)
+        .unwrap();
+
+    println!("Finished running shader computation.");
+
+    // retrieve the data
+    let content = data_buffer.read().unwrap();
+    for (n, val) in content.iter().enumerate() {
+        //assert that the calculations output the expected value
+        assert_eq!(*val, n as u32 * 12);
+    }
+
+    println!("Everything worked as expected.");
     println!("Hello World Complete!");
 }
 
