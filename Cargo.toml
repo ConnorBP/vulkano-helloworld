@@ -5,4 +5,7 @@ authors = ["Connor Postma <connor.postma@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+#Vulkan graphics api wrapper library
 vulkano = "0.11.1"
+#Multiplatform window creation
+winit = "0.19.1"
