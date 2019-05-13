@@ -7,5 +7,7 @@ edition = "2018"
 [dependencies]
 #Vulkan graphics api wrapper library
 vulkano = "0.11.1"
+#procedural macro that manages the compile-time compilation of GLSL into SPIR-V and generation of assosciated rust code.
+vulkano-shaders = "0.11.1"
 #Multiplatform window creation
 winit = "0.19.1"

@@ -1,20 +1,28 @@
+use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano::buffer::CpuAccessibleBuffer;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::command_buffer::CommandBuffer;
+use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::device::Device;
 use vulkano::device::DeviceExtensions;
 use vulkano::device::Features;
 use vulkano::instance::Instance;
 use vulkano::instance::InstanceExtensions;
 use vulkano::instance::PhysicalDevice;
+use vulkano::pipeline::ComputePipeline;
 use vulkano::sync::GpuFuture;
 
-//winit window creation
+// winit for window creation
 use winit::{EventsLoop, WindowBuilder};
 
 /// Minimal Vulkano implementation based on the docs here: http://vulkano.rs/guide/example-operation
 fn main() {
+    //
+    // -------------------------------------
+    // Setup the needed API helpers, instances, handles, etc
+    //
+
     // tries to get an instance to the systems Vulkan installation TODO: handle vulkan gpu driver or runtime not being installed with an informative popup error message
     let instance =
         Instance::new(None, &InstanceExtensions::none(), None).expect("failed to create instance");
@@ -77,7 +85,9 @@ fn main() {
         .build()
         .unwrap();
 
-    // submit and sync. Returns an async "GpuFuture" object
+    // -------------------------------------
+    // submit and sync. Executes the command buffer and returns a GpuFuture
+    //
 
     let finished = command_buffer.execute(queue.clone()).unwrap();
 
@@ -94,5 +104,51 @@ fn main() {
     let dest_content = dest.read().unwrap();
     assert_eq!(&*src_content, &*dest_content);
 
-    println!("Hello, world succeeded!");
+    // -------------------------------------
+    // now we are going to try running some parallel computations on a large arbitrary iteration of numbers
+    // http://vulkano.rs/guide/compute-intro
+    //
+
+    //store our large iteration of values into a buffer
+    let data_iter = 0..65536;
+    let data_buffer = CpuAccessibleBuffer::from_iter(device.clone(), BufferUsage::all(), data_iter)
+        .expect("failed to create data_iter buffer");
+
+    // Now we create a compute pipeline (with shader programs)
+
+    // load the generated shader interface to an object for use
+    let shader = cs::Shader::load(device.clone()).expect("failed to create shader module");
+
+    //create the compute shader pipeline for a device
+    let compute_pipeline = Arc::new(
+        ComputePipeline::new(device.clone(), &shader.main_entry_point(), &())
+            .expect("failed to create compute pipeline"),
+    );
+
+    // create the descriptor set (0) for our compute_pipeline and buffer
+    // a created descriptor set can be used for any pipeline takes the same data into it's shaders
+    // However, creating the descriptor set requires at least one pipeline to already exist and be provided
+    let set = Arc::new(
+        PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
+            .add_buffer(data_buffer.clone())
+            .unwrap()
+            .build()
+            .unwrap(),
+    );
+
+    println!("Hello World Complete!");
+}
+
+// generate the access code for our shader using a proc_macro
+// https://docs.rs/vulkano-shaders/0.11.0/vulkano_shaders/
+// ty: vertex, fragment, geometry, tess_ctrl, tess_eval, compute
+// src: src code as an inline string litteral (only this or path can be defined)
+// path: the path to a GLSL file relative to the cargo.toml directory root
+/// Compute shader interface generated at compile-time.
+/// Sets up our compute shader access functions for us as well as compiling it into SPIR-V when we build
+mod cs {
+    vulkano_shaders::shader! {
+        ty: "compute",
+        path: "shaders/mul_12.glsl"
+    }
 }
